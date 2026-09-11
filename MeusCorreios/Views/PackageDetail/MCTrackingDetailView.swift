@@ -47,7 +47,7 @@ struct MCTrackingDetailView: View {
     NavigationStack {
         MCTrackingDetailView(
             packageID: "AA123456789BR",
-            viewModel: MCPackageListViewModel(service: MCMockTrackingService())
+            viewModel: MCPackageListViewModel(store: .inMemory(), service: MCMockTrackingService())
         )
     }
 }

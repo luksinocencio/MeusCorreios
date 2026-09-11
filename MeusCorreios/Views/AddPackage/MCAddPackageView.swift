@@ -54,5 +54,5 @@ struct MCAddPackageView: View {
 }
 
 #Preview {
-    MCAddPackageView(viewModel: MCPackageListViewModel(service: MCMockTrackingService()))
+    MCAddPackageView(viewModel: MCPackageListViewModel(store: .inMemory(), service: MCMockTrackingService()))
 }

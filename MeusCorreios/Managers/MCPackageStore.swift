@@ -1,41 +1,140 @@
 import Foundation
+import OSLog
+import SwiftData
 
 @MainActor
 final class MCPackageStore: ObservableObject {
     @Published private(set) var packages: [MCPackage] = []
 
-    private let defaults: UserDefaults
-    private let storageKey = "MCPackageStore.packages"
+    private let context: ModelContext
+    private let logger = Logger(subsystem: "com.devmeist3r.MeusCorreios", category: "MCPackageStore")
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        load()
+    /// Sem `context`, usa o container compartilhado do app (em disco) e migra
+    /// uma única vez os pacotes salvos pela versão anterior em `UserDefaults`.
+    init(context: ModelContext? = nil) {
+        let usesSharedContext = context == nil
+        self.context = context ?? Self.sharedContainer.mainContext
+        if usesSharedContext {
+            migrateLegacyStorageIfNeeded()
+        }
+        reload()
+    }
+
+    /// Store isolado em memória, para previews e testes.
+    static func inMemory() -> MCPackageStore {
+        MCPackageStore(context: ModelContext(makeContainer(inMemory: true)))
     }
 
     func upsert(_ package: MCPackage) {
-        if let index = packages.firstIndex(where: { $0.id == package.id }) {
-            packages[index] = package
+        let record: MCPackageRecord
+        if let existing = fetchRecord(id: package.id) {
+            record = existing
         } else {
-            packages.append(package)
+            record = MCPackageRecord(id: package.id, nickname: package.nickname)
+            context.insert(record)
         }
+        record.nickname = package.nickname
+        merge(package.events, into: record)
         save()
+        reload()
+    }
+
+    /// Casa os eventos recebidos da API com os já salvos pela `matchKey`: os que já existem
+    /// são reaproveitados (mantendo o mesmo registro e o mesmo `id`), só os novos são inseridos
+    /// e os que sumiram da origem são apagados.
+    private func merge(_ events: [MCTrackingEvent], into record: MCPackageRecord) {
+        var reusable = Dictionary(grouping: record.events, by: \.matchKey)
+
+        let merged = events.map { event -> MCTrackingEventRecord in
+            guard let existing = reusable[event.matchKey]?.first else {
+                return MCTrackingEventRecord(event)
+            }
+            reusable[event.matchKey]?.removeFirst()
+            // A classificação do status pode mudar entre versões do app.
+            existing.status = event.status
+            return existing
+        }
+
+        reusable.values.flatMap { $0 }.forEach { context.delete($0) }
+        record.events = merged
     }
 
     func remove(at offsets: IndexSet) {
-        packages.remove(atOffsets: offsets)
+        for index in offsets {
+            guard let record = fetchRecord(id: packages[index].id) else { continue }
+            context.delete(record)
+        }
         save()
+        reload()
     }
 
-    private func load() {
-        guard let data = defaults.data(forKey: storageKey),
-              let decoded = try? JSONDecoder().decode([MCPackage].self, from: data) else {
-            return
+    private func fetchRecord(id: String) -> MCPackageRecord? {
+        let descriptor = FetchDescriptor<MCPackageRecord>(predicate: #Predicate { $0.id == id })
+        return fetch(descriptor).first
+    }
+
+    private func reload() {
+        let descriptor = FetchDescriptor<MCPackageRecord>(sortBy: [SortDescriptor(\.createdAt)])
+        packages = fetch(descriptor).map(\.asPackage)
+    }
+
+    private func fetch(_ descriptor: FetchDescriptor<MCPackageRecord>) -> [MCPackageRecord] {
+        do {
+            return try context.fetch(descriptor)
+        } catch {
+            logger.error("Falha ao ler os pacotes: \(error.localizedDescription, privacy: .public)")
+            return []
         }
-        packages = decoded
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(packages) else { return }
-        defaults.set(data, forKey: storageKey)
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            logger.error("Falha ao salvar os pacotes: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: - Migração da persistência antiga (UserDefaults)
+
+    private static let legacyStorageKey = "MCPackageStore.packages"
+
+    private func migrateLegacyStorageIfNeeded(defaults: UserDefaults = .standard) {
+        guard let data = defaults.data(forKey: Self.legacyStorageKey) else { return }
+        defer { defaults.removeObject(forKey: Self.legacyStorageKey) }
+
+        guard let legacyPackages = try? JSONDecoder().decode([MCPackage].self, from: data) else {
+            logger.error("Dados antigos em UserDefaults não puderam ser lidos; descartando.")
+            return
+        }
+
+        let base = Date.now
+        for (index, package) in legacyPackages.enumerated() where fetchRecord(id: package.id) == nil {
+            // O offset preserva a ordem original da lista.
+            let record = MCPackageRecord(
+                id: package.id,
+                nickname: package.nickname,
+                createdAt: base.addingTimeInterval(Double(index) / 1_000)
+            )
+            record.events = package.events.map(MCTrackingEventRecord.init)
+            context.insert(record)
+        }
+        save()
+    }
+
+    // MARK: - Container
+
+    static let sharedContainer = makeContainer(inMemory: false)
+
+    private static func makeContainer(inMemory: Bool) -> ModelContainer {
+        do {
+            return try ModelContainer(
+                for: MCPackageRecord.self, MCTrackingEventRecord.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory)
+            )
+        } catch {
+            fatalError("Não foi possível inicializar o banco de dados local: \(error)")
+        }
     }
 }

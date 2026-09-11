@@ -62,6 +62,6 @@ struct MCPackageListView: View {
 
 #Preview {
     MCPackageListView {
-        MCPackageListViewModel(service: MCMockTrackingService())
+        MCPackageListViewModel(store: .inMemory(), service: MCMockTrackingService())
     }
 }
