@@ -7,9 +7,14 @@ struct MCAddPackageView: View {
     @State private var code = ""
     @State private var nickname = ""
     @State private var isSaving = false
+    @State private var errorMessage: String?
 
     private var isValid: Bool {
         MCTrackingCode.isValid(code)
+    }
+
+    private var isPresentingError: Binding<Bool> {
+        Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
     }
 
     var body: some View {
@@ -33,10 +38,12 @@ struct MCAddPackageView: View {
                     Button {
                         Task {
                             isSaving = true
-                            await viewModel.add(code: code, nickname: nickname)
-                            isSaving = false
-                            if viewModel.errorMessage == nil {
+                            defer { isSaving = false }
+                            do {
+                                try await viewModel.add(code: code, nickname: nickname)
                                 dismiss()
+                            } catch {
+                                errorMessage = error.localizedDescription
                             }
                         }
                     } label: {
@@ -48,6 +55,11 @@ struct MCAddPackageView: View {
                     }
                     .disabled(!isValid || isSaving)
                 }
+            }
+            .alert("Ops", isPresented: isPresentingError, presenting: errorMessage) { _ in
+                Button("OK") { errorMessage = nil }
+            } message: { message in
+                Text(message)
             }
         }
     }

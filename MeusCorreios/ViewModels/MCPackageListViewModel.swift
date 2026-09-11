@@ -25,30 +25,32 @@ final class MCPackageListViewModel: ObservableObject {
         loadingIDs.contains(package.id)
     }
 
-    func add(code: String, nickname: String) async {
-        await track(code: code, nickname: nickname)
+    /// Propaga o erro para quem chamou: a sheet de adicionar apresenta o alerta
+    /// por conta própria, para não ser descartada junto com o formulário.
+    func add(code: String, nickname: String) async throws {
+        try await track(code: code, nickname: nickname)
     }
 
     func refresh(_ package: MCPackage) async {
-        await track(code: package.id, nickname: package.nickname)
+        do {
+            try await track(code: package.id, nickname: package.nickname)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func delete(at offsets: IndexSet) {
         store.remove(at: offsets)
     }
 
-    private func track(code: String, nickname: String) async {
+    private func track(code: String, nickname: String) async throws {
         let normalized = MCTrackingCode.normalize(code)
         loadingIDs.insert(normalized)
         defer { loadingIDs.remove(normalized) }
 
-        do {
-            var package = try await service.trackPackage(code: normalized)
-            package.nickname = nickname
-            store.upsert(package)
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        var package = try await service.trackPackage(code: normalized)
+        package.nickname = nickname
+        store.upsert(package)
     }
 }
