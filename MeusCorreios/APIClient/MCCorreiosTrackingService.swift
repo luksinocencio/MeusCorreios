@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Implementação real: GET /srorastro/v1/objetos/{codigo}?resultado=T na API Rastro dos Correios.
 /// https://www.correios.com.br/atendimento/developers
@@ -6,6 +7,7 @@ import Foundation
 struct MCCorreiosTrackingService: MCTrackingServicing {
     private let session: URLSession
     private let authService: MCCorreiosAuthService
+    private let logger = Logger(subsystem: "com.devmeist3r.MeusCorreios", category: "MCCorreiosTrackingService")
 
     init(session: URLSession = .shared, authService: MCCorreiosAuthService) {
         self.session = session
@@ -61,8 +63,13 @@ struct MCCorreiosTrackingService: MCTrackingServicing {
             throw MCTrackingError.notFound
         }
 
-        let events = objeto.eventos.map { evento -> MCTrackingEvent in
-            let date = MCCorreiosDateFormatter.parse(evento.dtHrCriado) ?? Date()
+        // Sem data confiável não há como posicionar o evento na linha do tempo;
+        // inventar uma (antes, `Date()`) o colocaria no topo como se fosse o mais recente.
+        let events = objeto.eventos.compactMap { evento -> MCTrackingEvent? in
+            guard let date = MCCorreiosDateFormatter.parse(evento.dtHrCriado) else {
+                logger.error("Evento ignorado: data em formato inesperado (\(evento.dtHrCriado, privacy: .public))")
+                return nil
+            }
             let location = [evento.unidade?.endereco?.cidade, evento.unidade?.endereco?.uf]
                 .compactMap { $0 }
                 .joined(separator: "/")
