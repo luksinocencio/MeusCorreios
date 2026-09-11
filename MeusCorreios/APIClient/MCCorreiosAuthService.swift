@@ -14,6 +14,9 @@ final class MCCorreiosAuthService {
 
     private var cachedToken: String?
     private var expiresAt: Date?
+    /// Credenciais que geraram o token em cache: trocar ambiente, usuário ou
+    /// senha precisa forçar uma nova autenticação.
+    private var cachedCredentials: MCCorreiosCredentials?
 
     init(session: URLSession = .shared, credentialsStore: MCCredentialsStore) {
         self.session = session
@@ -26,14 +29,25 @@ final class MCCorreiosAuthService {
             throw MCTrackingError.missingCredentials
         }
 
-        if let cachedToken, let expiresAt, expiresAt > Date().addingTimeInterval(30) {
+        if let cachedToken, let expiresAt,
+           cachedCredentials == credentials,
+           expiresAt > Date().addingTimeInterval(30) {
             return (cachedToken, credentials.environment.baseURL)
         }
 
         let result = try await requestToken(credentials: credentials)
         cachedToken = result.token
         expiresAt = result.expiresAt
+        cachedCredentials = credentials
         return (result.token, credentials.environment.baseURL)
+    }
+
+    /// Descarta o token em memória. Chamado quando a API recusa o token (401/403),
+    /// para a consulta seguinte autenticar de novo em vez de repetir o mesmo erro.
+    func invalidateToken() {
+        cachedToken = nil
+        expiresAt = nil
+        cachedCredentials = nil
     }
 
     private func requestToken(credentials: MCCorreiosCredentials) async throws -> (token: String, expiresAt: Date?) {

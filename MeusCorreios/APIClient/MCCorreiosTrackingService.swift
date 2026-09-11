@@ -45,6 +45,10 @@ struct MCCorreiosTrackingService: MCTrackingServicing {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw MCTrackingError.requestFailed
         }
+        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+            authService.invalidateToken()
+            throw MCTrackingError.authenticationFailed
+        }
         if httpResponse.statusCode == 404 {
             throw MCTrackingError.notFound
         }
