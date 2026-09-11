@@ -60,8 +60,9 @@ MCPackageListViewModel(store: .inMemory(), service: MCMockTrackingService())
    (ver [API dos Correios](api-correios.md)).
 5. O apelido digitado é aplicado ao pacote e `store.upsert(_:)` grava no SwiftData.
 6. O store republica `packages`; o ViewModel espelha via `assign(to:)`; a lista se atualiza.
-7. Se algo falha, `errorMessage` recebe o `localizedDescription` do `MCTrackingError` e a lista
-   apresenta um `alert`. A sheet de adicionar só fecha quando não houve erro.
+7. Se algo falha, `add(code:nickname:)` **propaga** o erro: a sheet apresenta o alerta por conta
+   própria e continua aberta, com o que foi digitado. Um alerta disparado pela raiz enquanto a
+   sheet está aberta faria o SwiftUI descartar a sheet junto — e o formulário com ela.
 
 ## Fluxo: atualizar (pull-to-refresh)
 
@@ -75,7 +76,8 @@ preservando o `id` de cada evento. O detalhe está em [persistência](persistenc
 | --- | --- | --- |
 | Lista de pacotes | SwiftData → `MCPackageStore.packages` | `assign(to:)` → `@Published packages` |
 | Carregando | `loadingIDs: Set<String>` no ViewModel | `viewModel.isLoading(package)` |
-| Erro | `errorMessage: String?` no ViewModel | `.alert` em `MCPackageListView` |
+| Erro no refresh | `errorMessage: String?` no ViewModel | `.alert` em `MCPackageListView` |
+| Erro ao adicionar | `@State` local na sheet | `.alert` em `MCAddPackageView` |
 | Credenciais | Keychain → `MCCredentialsStore.credentials` | `@ObservedObject` em `MCSettingsView` |
 | Tema | `UserDefaults` via `@AppStorage` | `.preferredColorScheme` em `MCApp` |
 

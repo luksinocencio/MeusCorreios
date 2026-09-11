@@ -51,6 +51,12 @@ MCPackageRecord
 Abrir mais de um container em disco sobre o mesmo arquivo causa disputa pelo SQLite; por isso o
 container é compartilhado e o store nunca instancia um novo por conta própria.
 
+Se o banco em disco não abrir — corrompido, ou incompatível com o schema —, o container **degrada
+para memória** em vez de derrubar o app: um `fatalError` aqui significaria crash no lançamento, em
+loop, sem caminho de recuperação. Nesse modo `isUsingFallbackStorage` fica `true`, os Ajustes
+mostram um aviso de que nada será salvo, e a falha vai para o log. O `fatalError` só permanece no
+caso em que nem o container em memória pode ser criado.
+
 ## Leitura e escrita
 
 `MCPackageStore` é `@MainActor` e `ObservableObject`. Ele publica `packages: [MCPackage]`, que o

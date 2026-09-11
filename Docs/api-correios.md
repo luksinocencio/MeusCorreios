@@ -44,6 +44,11 @@ A resposta traz `token` e `expiraEm`. O `MCCorreiosAuthService` guarda ambos **e
 margem para a requisição seguinte não estourar no meio do caminho. Como o cache é de instância e
 o serviço é criado junto com o ViewModel, reiniciar o app sempre gera um token novo.
 
+O cache guarda também as credenciais que geraram o token e é descartado quando elas mudam:
+trocar ambiente, usuário, senha ou dados do contrato força uma autenticação nova. Sem isso, mudar
+de produção para homologação continuaria mandando o token antigo para o host novo até ele expirar.
+`invalidateToken()` descarta o cache na hora, e é chamado quando a API recusa o token.
+
 ## Consulta de rastreamento
 
 ```
@@ -62,6 +67,7 @@ do envio. Tratamento de resposta:
 | Código fora do formato | `.invalidCode` | "Código de rastreio inválido. Use o formato AA123456789BR." |
 | HTTP 404, ou JSON sem objetos | `.notFound` | "Não encontramos informações para esse código." |
 | Credenciais incompletas | `.missingCredentials` | "Configure suas credenciais da API dos Correios em Ajustes." |
+| HTTP 401/403 (token recusado) | `.authenticationFailed` | "Não foi possível autenticar…" |
 | Falha na autenticação (status ≠ 2xx ou JSON inesperado) | `.authenticationFailed` | "Não foi possível autenticar…" |
 | Erro de transporte ou outro status | `.requestFailed` | "Falha ao consultar o rastreamento…" |
 
@@ -75,9 +81,14 @@ unidade.endereco.cidade + "/" + …uf           → MCTrackingEvent.location
 classify(codigo:descricao:)                   → MCTrackingEvent.status
 ```
 
-- **Datas**: a API envia `yyyy-MM-dd'T'HH:mm:ss` sem timezone, em horário de Brasília.
-  `MCCorreiosDateFormatter` interpreta com `America/Sao_Paulo`; a exibição usa o fuso do aparelho.
-  Data que não parseia vira `Date()` — o evento aparece, mas com a data errada.
+- **Datas**: o formato documentado é `yyyy-MM-dd'T'HH:mm:ss`, sem timezone e em horário de
+  Brasília, mas a API também devolve variações com frações de segundo.
+  `MCCorreiosDateFormatter` tenta as três variações com `America/Sao_Paulo` e, como último
+  recurso, dois `ISO8601DateFormatter` (com e sem fração) para datas que tragam fuso explícito;
+  a exibição usa o fuso do aparelho. **Evento cuja data não parseia é descartado**, com registro
+  no log: numa tela que é uma linha do tempo, um evento na posição errada engana mais do que um
+  evento ausente — e a alternativa anterior (`?? Date()`) o jogava para o topo, como se fosse o
+  mais recente.
 - **Local**: cidade e UF são opcionais no JSON; quando faltam, o resultado é uma string vazia ou
   parcial (o app não inventa placeholder).
 - **Apelido**: a API não conhece apelido. O serviço devolve `nickname: ""` e quem preenche é o

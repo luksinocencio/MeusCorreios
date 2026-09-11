@@ -25,8 +25,9 @@ Raiz do app. Sem pacotes, mostra `MCEmptyStateView` com um botão que abre a she
 Com pacotes, uma `List` de `MCPackageRow` com swipe-to-delete (`.onDelete`). Na toolbar:
 engrenagem (Ajustes) à esquerda, `+` (adicionar) à direita.
 
-É aqui que vive o `.alert("Ops")` de erro, alimentado por `viewModel.errorMessage` — inclusive
-para erros originados dentro das sheets.
+É aqui que vive o `.alert("Ops")` alimentado por `viewModel.errorMessage`, usado pelos erros de
+**atualização** (pull-to-refresh). Erros ao adicionar são apresentados pela própria sheet: um
+alerta disparado por esta view enquanto a sheet está aberta faria o SwiftUI descartá-la.
 
 É também a única View que cria o ViewModel, com `@StateObject` e um closure no init, para que a
 instância sobreviva às recomposições e possa ser substituída nos previews:
@@ -39,8 +40,9 @@ init(viewModel: (() -> MCPackageListViewModel)? = nil)
 
 `Form` com código de rastreio (maiúsculas automáticas, sem autocorreção) e apelido opcional.
 **Salvar** fica desabilitado enquanto o código não passar em `MCTrackingCode.isValid` ou enquanto
-a consulta estiver em andamento, quando o botão vira um `ProgressView`. A sheet só fecha se a
-consulta terminar sem erro — assim o alerta aparece com o formulário ainda preenchido.
+a consulta estiver em andamento, quando o botão vira um `ProgressView`. A sheet tem o **próprio**
+`.alert`, com estado local: no erro ela continua aberta, com código e apelido preenchidos, e só
+fecha quando a consulta dá certo.
 
 ### Detalhe do pacote — `MCTrackingDetailView`
 
@@ -53,6 +55,8 @@ ou o código quando não há apelido.
 
 `Form` com quatro seções:
 
+0. **Aviso de armazenamento** — só aparece se o banco local não pôde ser aberto e o app está
+   rodando em memória (`MCPackageStore.isUsingFallbackStorage`).
 1. **Aparência** — `Picker` de tema (Sistema / Claro / Escuro).
 2. **Ambiente** — produção ou homologação.
 3. **Autenticação** — modo (usuário e senha / contrato / cartão de postagem), usuário e senha.
@@ -60,9 +64,10 @@ ou o código quando não há apelido.
    escolhido exige esses campos, e o cartão só no modo correspondente.
 
 No rodapé, link para o portal de desenvolvedores e o aviso de que as credenciais ficam apenas no
-Chaveiro do aparelho. As edições são gravadas a cada alteração: `MCCredentialsStore.credentials`
-tem um `didSet` que salva no Keychain, então não existe botão "salvar" — só "Concluir", que
-fecha a sheet.
+Chaveiro do aparelho. Não existe botão "salvar" — só "Concluir", que fecha a sheet: o `didSet` de
+`MCCredentialsStore.credentials` agenda a gravação com um debounce de 500 ms (sem ele, cada tecla
+custaria um delete + add no Chaveiro), e o `.onDisappear` chama `saveNow()` para nada se perder
+se o app for encerrado dentro dessa janela.
 
 ## Componentes compartilhados
 
