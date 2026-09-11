@@ -7,7 +7,8 @@ final class MCPackageStore: ObservableObject {
     @Published private(set) var packages: [MCPackage] = []
 
     private let context: ModelContext
-    private let logger = Logger(subsystem: "com.devmeist3r.MeusCorreios", category: "MCPackageStore")
+    private var logger: Logger { Self.logger }
+    private static let logger = Logger(subsystem: "com.devmeist3r.MeusCorreios", category: "MCPackageStore")
 
     /// Sem `context`, usa o container compartilhado do app (em disco) e migra
     /// uma única vez os pacotes salvos pela versão anterior em `UserDefaults`.
@@ -127,14 +128,30 @@ final class MCPackageStore: ObservableObject {
 
     static let sharedContainer = makeContainer(inMemory: false)
 
+    /// `true` quando o banco em disco não pôde ser aberto e o app está rodando
+    /// só com memória — nada do que for adicionado sobrevive ao encerramento.
+    private(set) static var isUsingFallbackStorage = false
+
     private static func makeContainer(inMemory: Bool) -> ModelContainer {
         do {
-            return try ModelContainer(
-                for: MCPackageRecord.self, MCTrackingEventRecord.self,
-                configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory)
-            )
+            return try makeContainer(isStoredInMemoryOnly: inMemory)
         } catch {
-            fatalError("Não foi possível inicializar o banco de dados local: \(error)")
+            // Um banco corrompido ou incompatível derrubaria o app no lançamento,
+            // em loop, sem caminho de recuperação. Degrada para memória.
+            logger.error("Banco local indisponível, usando armazenamento temporário: \(error.localizedDescription, privacy: .public)")
+            isUsingFallbackStorage = true
+            do {
+                return try makeContainer(isStoredInMemoryOnly: true)
+            } catch {
+                fatalError("Não foi possível inicializar o banco de dados local: \(error)")
+            }
         }
+    }
+
+    private static func makeContainer(isStoredInMemoryOnly: Bool) throws -> ModelContainer {
+        try ModelContainer(
+            for: MCPackageRecord.self, MCTrackingEventRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: isStoredInMemoryOnly)
+        )
     }
 }

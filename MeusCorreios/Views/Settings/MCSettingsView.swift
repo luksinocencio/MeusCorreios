@@ -8,6 +8,16 @@ struct MCSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if MCPackageStore.isUsingFallbackStorage {
+                    Section {
+                        Label(
+                            "O banco local não pôde ser aberto. Os pacotes adicionados agora valem só até você fechar o app.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .foregroundStyle(.orange)
+                    }
+                }
+
                 Section("Aparência") {
                     Picker("Tema", selection: $appearance) {
                         ForEach(MCAppearance.allCases) { appearance in
