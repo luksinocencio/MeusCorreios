@@ -1,8 +1,8 @@
 import Foundation
 
-/// Implementação provisória enquanto não integramos a API real dos Correios.
+/// Serviço falso usado nos `#Preview` e no desenvolvimento sem credenciais da API real.
 /// Gera uma linha do tempo determinística a partir do código, para que o mesmo
-/// código sempre produza o mesmo resultado durante o desenvolvimento.
+/// código sempre produza o mesmo resultado.
 struct MCMockTrackingService: MCTrackingServicing {
     private static let timeline: [(status: MCTrackingStatus, location: String, description: String)] = [
         (.postado, "São Paulo/SP", "Objeto postado"),
