@@ -2,11 +2,20 @@ import SwiftUI
 
 struct MCSettingsView: View {
     @ObservedObject var credentialsStore: MCCredentialsStore
+    @AppStorage(MCAppearance.storageKey) private var appearance: MCAppearance = .sistema
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Aparência") {
+                    Picker("Tema", selection: $appearance) {
+                        ForEach(MCAppearance.allCases) { appearance in
+                            Text(appearance.title).tag(appearance)
+                        }
+                    }
+                }
+
                 Section("Ambiente") {
                     Picker("Ambiente", selection: $credentialsStore.credentials.environment) {
                         ForEach(MCCorreiosEnvironment.allCases) { environment in
