@@ -56,6 +56,7 @@ struct MCSettingsView: View {
                 }
             }
             .navigationTitle("Ajustes")
+            .onDisappear { credentialsStore.saveNow() }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Concluir") { dismiss() }
