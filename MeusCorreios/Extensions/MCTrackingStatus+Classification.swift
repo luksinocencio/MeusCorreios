@@ -8,11 +8,13 @@ extension MCTrackingStatus {
             .folding(options: .diacriticInsensitive, locale: Locale(identifier: "pt_BR"))
             .lowercased()
 
-        if text.contains("entregue") {
-            return .entregue
-        }
+        // A falha vem antes do sucesso: "nao entregue" contém "entregue",
+        // então testar a entrega primeiro classificaria a falha como sucesso.
         if text.contains("nao entregue") || text.contains("tentativa") || text.contains("ausente") || text.contains("extraviado") || text.contains("avaria") {
             return .fracassado
+        }
+        if text.contains("entregue") {
+            return .entregue
         }
         if text.contains("saiu para entrega") || text.contains("rota de entrega") {
             return .saiuParaEntrega
